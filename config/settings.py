@@ -42,9 +42,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib.gis',        # GeoDjango
-    'leaflet',                   # Leaflet map support
-    'mapa',                      # Twoja aplikacja
+    'django.contrib.gis',
+    'leaflet',
+    "corsheaders",
+    'mapa',
 ]
 
 # MIDDLEWARE
@@ -57,6 +58,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
 ]
 
 # URLS / WSGI
@@ -139,3 +141,10 @@ LEAFLET_CONFIG = {
 # API KEYS
 OPENCAGE_API_KEY = config("OPENCAGE_API_KEY")
 GOOGLE_MAPS_API_KEY = config("GOOGLE_MAPS_API_KEY")
+
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # lokalny front-end
+    "http://127.0.0.1:8000",  # lokalny backend (jeśli testujesz)
+    "https://mapa-czaskobiet.fly.dev",  # prod
+]

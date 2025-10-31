@@ -1,48 +1,33 @@
-FROM osgeo/gdal:ubuntu-full-3.6.2
+# 1. Wybieramy Python
+FROM python:3.10
 
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Europe/Warsaw
-
-# 🐍 Python + pip + GDAL
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-dev \
-    python3-gdal \
-    gcc \
-    gdal-bin \
-    libproj-dev \
-    libgdal-dev \
-    libgeos-dev \
-    libpq-dev \
-    tzdata \
-    && apt-get clean
-
-# 🔗 Link do GDAL
-RUN find /usr/lib -name "libgdal.so*" && \
-    ln -sf $(find /usr/lib -name "libgdal.so*" | grep -E '\.so(\.[0-9]+)?$' | head -n 1) /usr/lib/libgdal.so
-
-# 🔧 Środowisko
-ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
-ENV C_INCLUDE_PATH=/usr/include/gdal
-ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
-ENV PYTHONUNBUFFERED=1
-
-# 🗂️ Projekt
 WORKDIR /app
+
+# 2. Instalacja zależności systemowych
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gdal-bin libgdal-dev libproj-dev libgeos-dev \
+    postgresql-client python3-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 3. Symlink dla GDAL
+RUN GDAL_LIB=$(ldconfig -p | grep libgdal.so | head -n1 | awk '{print $4}') && \
+    ln -sf $GDAL_LIB /usr/lib/libgdal.so
+
+# 4. Kopiujemy tylko requirements i instalujemy pakiety
 COPY requirements.txt .
-RUN python3 -m pip install --upgrade pip
-RUN python3 -m pip install -r requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+
+# 5. Kopiujemy cały projekt **przed collectstatic**
 COPY . .
 
-# 🚀 Uruchomienie
-EXPOSE 8000
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]
+# 6. Uruchamiamy collectstatic (TERAZ manage.py istnieje)
+RUN python manage.py collectstatic --noinput
 
-FROM ubuntu:22.04
+# 7. Test GDAL
+RUN python -c "from ctypes import CDLL; CDLL('$GDAL_LIBRARY_PATH')"
 
-RUN apt-get update && apt-get install -y gnupg2 curl && \
-    curl -sSL https://apache.jfrog.io/artifactory/api/gpg/key/public \
-      | gpg --dearmor -o /usr/share/keyrings/apache-arrow.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/apache-arrow.gpg] https://apache.jfrog.io/artifactory/arrow/ubuntu jammy main" \
-      > /etc/apt/sources.list.d/apache-arrow.list
+# 8. Port
+EXPOSE 8080
+
+# 9. Uruchomienie Gunicorna
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8080", "--workers", "3"]

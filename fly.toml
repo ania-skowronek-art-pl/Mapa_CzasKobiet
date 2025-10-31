@@ -1,20 +1,20 @@
-app = "mapa-czaskobiet"   # <- dokładnie tak, jak nazwa Twojej aplikacji na fly.io
+app = "mapa-czaskobiet"
 primary_region = "waw"
 
 [build]
   dockerfile = "Dockerfile"
 
 [env]
-  DEBUG = "True"
+  DEBUG = "False"
   DJANGO_SETTINGS_MODULE = "config.settings"
   ALLOWED_HOSTS = "mapa-czaskobiet.fly.dev"
 
 [[statics]]
-guest_path = "/app/staticfiles"
-url_prefix = "/static/"
+  guest_path = "/app/staticfiles"
+  url_prefix = "/static/"
 
 [[services]]
-  internal_port = 8000
+  internal_port = 8080
   protocol = "tcp"
 
   [[services.ports]]

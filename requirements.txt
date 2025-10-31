@@ -8,3 +8,6 @@ python-decouple>=3.8
 whitenoise>=6.6
 dj-database-url>=2.1
 googlemaps
+django-cors-headers
+pyarrow>=12.0.0
+# GDAL nie wymaga podawania wersji, pip weźmie systemową bibliotek

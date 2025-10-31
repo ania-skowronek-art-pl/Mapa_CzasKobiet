@@ -13,19 +13,25 @@
   </a>
   <img src="{% static 'icons/mapa-pomocy.svg' %}" alt="Fundacja Czas Kobiet" />
   <h3>
-    Jeśli doświadczasz przemocy,<br />znajdź wsparcie w&nbsp;swojej okolicy:
+    Jeśli doświadczasz przemocy,<br />znajdź wsparcie w&nbsp;swojej okolicy
   </h3>
 </div>
 
 <div id="filters-panel" class="subgrid">
-  <div class="input-col">
-    <label for="address-input">Miejscowość</label>
-    <input type="text" id="address-input" placeholder="np. Poznań" />
-  </div>
+    <div class="input-col">
+        <label for="address-input">Miejscowość</label>
+        <input
+          type="text"
+          id="address-input"
+          placeholder="np. Poznań"
+          class="effect--box-shadow"
+        />
+        <ul id="address-suggestions" class="suggestions-list"></ul>
+    </div>
 
   <div class="input-col">
     <label for="radius-select">Promień</label>
-    <select id="radius-select">
+    <select id="radius-select" class="effect--box-shadow">
       <option value="10">10 km</option>
       <option value="30">30 km</option>
       <option value="50" selected>50 km</option>
@@ -43,7 +49,7 @@
   <h4 class="full-width">Wybierz rodzaj pomocy</h4>
   <div class="subgrid" id="help-filters">
     <div
-      class="filter-tile help-filter button--effect-transform button--effect-outline button--teal"
+      class="filter-tile help-filter button--effect-transform button--effect-outline effect--box-shadow button--teal"
       data-filter="psychological_help"
     >
       <img
@@ -53,7 +59,7 @@
       <span class="label">Psychologiczna</span>
     </div>
     <div
-      class="filter-tile help-filter button--effect-transform button--effect-outline button--teal"
+      class="filter-tile help-filter button--effect-transform button--effect-outline effect--box-shadow button--teal"
       data-filter="legal_help"
     >
       <img
@@ -63,7 +69,7 @@
       <span class="label">Prawna</span>
     </div>
     <div
-      class="filter-tile help-filter button--effect-transform button--effect-outline button--teal"
+      class="filter-tile help-filter button--effect-transform button--effect-outline effect--box-shadow button--teal"
       data-filter="social_help"
     >
       <img
@@ -73,7 +79,7 @@
       <span class="label">Socjalna</span>
     </div>
     <div
-      class="filter-tile help-filter button--effect-transform button--effect-outline button--teal"
+      class="filter-tile help-filter button--effect-transform button--effect-outline effect--box-shadow button--teal"
       data-filter="accommodation"
     >
       <img
@@ -90,13 +96,13 @@
   <h4 class="full-width">Wybierz rodzaj ośrodka pomocowego</h4>
   <div class="subgrid" id="type-filters">
     <div
-      class="filter-tile button--text button--effect-transform button--effect-outline button--pink"
+      class="filter-tile button--text button--effect-transform button--effect-outline effect--box-shadow button--pink"
       data-type="NGO"
     >
       Pozarządowe
     </div>
     <div
-      class="filter-tile button--text button--effect-transform button--effect-outline button--violet"
+      class="filter-tile button--text button--effect-transform button--effect-outline effect--box-shadow button--violet"
       data-type="GOV"
     >
       Publiczne
@@ -127,7 +133,7 @@
   >
   <button
     id="reset-btn"
-    class="button--text sidebar-btn button--red button--effect-outline"
+    class="button--text sidebar-btn button--violet button--effect-outline"
   >
     Resetuj
   </button>
@@ -206,6 +212,8 @@
       detectRetina: true,
     }).addTo(map);
 
+    const MOVE_ON_RESULTS = true;
+
     // ===== UTYL =====
     const $ = (sel) => document.querySelector(sel);
     const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -259,6 +267,131 @@
         fitToPoland();
       });
 
+    // ===== AUTOCOMPLETE =====
+    const addressInput = document.getElementById("address-input");
+    const suggestionsList = document.getElementById("address-suggestions");
+    let selectedLocation = null;
+    let activeSuggestionIndex = -1; // do strzałek
+
+
+     function normalize(str) {
+      return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+
+    function renderSuggestions(results) {
+      suggestionsList.innerHTML = "";
+      selectedLocation = null;
+      activeSuggestionIndex = -1;
+
+      if (!results.length) return;
+
+      const settlements = results.map(r => {
+        const name = r.address.city || r.address.town || r.address.village || r.address.hamlet || r.address.municipality || r.address.locality;
+        if (!name) return null;
+        return {
+          name,
+          county: r.address.county || "",
+          state: r.address.state || "",
+          coords: { lat: parseFloat(r.lat), lng: parseFloat(r.lon) }
+        };
+      }).filter(r => r);
+
+      const unique = Array.from(new Map(settlements.map(s => {
+        const parts = [s.name];
+        if (s.county) parts.push(`${s.county}`);
+        if (s.state) parts.push(`${s.state}`);
+        const label = parts.join(", ");
+        return [label, { label, coords: s.coords }];
+      })).values()).slice(0,5);
+
+      unique.forEach((item, index) => {
+        const li = document.createElement("li");
+        li.textContent = item.label;
+        li.dataset.lat = item.coords.lat;
+        li.dataset.lng = item.coords.lng;
+        li.classList.add("suggestion-item");
+
+        // <-- użycie mousedown zamiast click, żeby lista nie zniknęła przedwcześnie
+        li.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          selectSuggestion(index, item);
+        });
+
+        suggestionsList.appendChild(li);
+      });
+    }
+
+    function selectSuggestion(index, item) {
+      const items = Array.from(suggestionsList.querySelectorAll("li"));
+      items.forEach(i => i.classList.remove("active"));
+      if (index >= 0) items[index].classList.add("active");
+
+      addressInput.value = item.label;
+      selectedLocation = item.coords;
+      suggestionsList.innerHTML = "";
+
+      map.setView([item.coords.lat, item.coords.lng], 12);
+
+      // nowo dodane: po kliknięciu w sugestię wyświetlamy listę wyników
+      const radius = parseFloat(document.getElementById("radius-select").value) || 50;
+      renderInstitutions(selectedLocation, radius, true);
+      showSidebar();
+      focusSearchArea(selectedLocation, radius);
+    }
+
+    addressInput.addEventListener("input", debounce(() => {
+      const query = addressInput.value.trim();
+      if (!query) {
+        suggestionsList.innerHTML = "";
+        selectedLocation = null;
+        return;
+      }
+
+      fetch(`/geocode/?q=${encodeURIComponent(query)}`)
+          .then(res => res.json())
+          .then(results => renderSuggestions(results))
+          .catch(err => console.error("Błąd geokodowania:", err));
+    }, 300));
+
+    addressInput.addEventListener("keydown", (e) => {
+      const items = Array.from(suggestionsList.querySelectorAll("li"));
+      if (!items.length) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex + 1) % items.length;
+        items.forEach(i => i.classList.remove("active"));
+        items[activeSuggestionIndex].classList.add("active");
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        activeSuggestionIndex = (activeSuggestionIndex - 1 + items.length) % items.length;
+        items.forEach(i => i.classList.remove("active"));
+        items[activeSuggestionIndex].classList.add("active");
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (activeSuggestionIndex >= 0) {
+          const item = items[activeSuggestionIndex];
+          selectedLocation = { lat: parseFloat(item.dataset.lat), lng: parseFloat(item.dataset.lng) };
+          addressInput.value = item.textContent;
+          suggestionsList.innerHTML = "";
+
+          map.setView([selectedLocation.lat, selectedLocation.lng], 12);
+
+          const radius = parseFloat(document.getElementById("radius-select").value) || 50;
+          renderInstitutions(selectedLocation, radius, true);
+          showSidebar();
+          focusSearchArea(selectedLocation, radius);
+        }
+      }
+    });
+
+    // Poprawiony handler kliknięcia w dokument
+    document.addEventListener("click", (e) => {
+      if (!addressInput.contains(e.target) && !suggestionsList.contains(e.target)) {
+        suggestionsList.innerHTML = "";
+      }
+    });
+
     function focusSearchArea(center, radiusKm) {
       const bounds = L.latLng(center.lat, center.lng).toBounds(radiusKm * 5000); // 2*R
       map.fitBounds(bounds, { maxZoom: 12, animate: false });
@@ -273,13 +406,14 @@
         t = setTimeout(() => fn(...a), ms);
       };
     }
-
     // ===== PANEL WYNIKÓW / PRZYCISK =====
     function updateToggleButtons(isVisible) {
       $$(".toggle-results-btn").forEach((btn) => {
         btn.textContent = isVisible ? "Ukryj wyniki" : "Pokaż wyniki";
       });
     }
+
+    window.MOVE_ON_RESULTS = window.MOVE_ON_RESULTS ?? true;
 
     function showSidebar() {
       const sidebar = document.querySelector("#sidebarResults");
@@ -292,12 +426,18 @@
       updateToggleButtons(true);
       if (MOVE_ON_RESULTS) setTimeout(fitToPoland, 60);
     }
+
+    window.MOVE_ON_RESULTS = window.MOVE_ON_RESULTS ?? true;
+
     function hideSidebar() {
       $("#sidebarResults")?.classList.remove("visible");
       document.body.classList.remove("results-open");
       updateToggleButtons(false);
       if (MOVE_ON_RESULTS) setTimeout(fitToPoland, 60);
     }
+
+    window.MOVE_ON_RESULTS = window.MOVE_ON_RESULTS ?? true;
+
     window.toggleResults = function () {
       const sidebar = $("#sidebarResults");
       const isVisible = sidebar?.classList.toggle("visible");
@@ -399,7 +539,7 @@
       setTimeout(() => {
         el.classList.remove("visible");
         el.textContent = "";
-      }, 4000);
+      }, 5000);
     }
     function getActiveTypes() {
       return Array.from(
@@ -488,62 +628,43 @@
       fitToPoland();
     });
 
-    // ===== SZUKAJ =====
-    document.getElementById("search-btn")?.addEventListener("click", () => {
-      const address = document.getElementById("address-input").value.trim();
-      const radius =
-        parseFloat(document.getElementById("radius-select").value) || 50;
-      const types = getActiveTypes();
-      const filters = getActiveFilters();
+      document.getElementById("search-btn")?.addEventListener("click", () => {
+      const address = addressInput.value.trim();
+      if (!address) return alert("Wpisz nazwę miejscowości.");
 
-      if (!address)
-        return showError("address-error", "Wpisz nazwę miejscowości.");
-      if (!types.length)
-        return showError(
-          "type-error",
-          "Wybierz rodzaj instytucji (GOV lub NGO)."
-        );
-      if (!filters.length)
-        return showError(
-          "help-error",
-          "Wybierz co najmniej jeden rodzaj pomocy."
-        );
+      const radius = parseFloat(document.getElementById("radius-select").value) || 50;
 
-      const geocoder = L.Control.Geocoder.nominatim();
-      geocoder.geocode(address + ", Polska", function (results) {
-        if (!results || !results.length)
-          return showError("address-error", "Nie znaleziono miejscowości.");
+      function doSearch(coords) {
+        selectedLocation = coords;
+        map.setView([coords.lat, coords.lng], 12);
+        renderInstitutions(coords, radius, true);
+        showSidebar(); // pokaż panel wyników
+        focusSearchArea(coords, radius);
+      }
 
-        const cityResult = results.find((r) =>
-          [
-            "city",
-            "town",
-            "village",
-            "hamlet",
-            "municipality",
-            "locality",
-            "administrative",
-            "neighbourhood",
-          ].includes(r.properties?.type)
-        );
-        if (!cityResult)
-          return showError(
-            "address-error",
-            "Nie znaleziono miejscowości w Polsce."
-          );
-        const { lat, lng } = cityResult.center;
-        if (!(lat >= 48.8 && lat <= 55.0 && lng >= 13.5 && lng <= 24.5))
-          return showError(
-            "address-error",
-            "Podana miejscowość nie znajduje się w Polsce."
-          );
-
-        const loc = { lat, lng };
-        map.setView([lat, lng], 12);
-        renderInstitutions(loc, radius, true);
-        showSidebar();
-        focusSearchArea(loc, radius);
-      });
+      if (!selectedLocation) {
+        if (suggestionsList.children.length > 0) {
+          const firstItem = suggestionsList.children[0];
+          doSearch({ lat: parseFloat(firstItem.dataset.lat), lng: parseFloat(firstItem.dataset.lng) });
+          addressInput.value = firstItem.textContent;
+          suggestionsList.innerHTML = "";
+        } else {
+          // fetch z Nominatim
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=10&q=${encodeURIComponent(address + ', Polska')}`)
+            .then(res => res.json())
+            .then(results => {
+              const cityResult = results.find(r =>
+                ["city","town","village","hamlet"].includes(r.type) ||
+                r.display_name.toLowerCase().includes(address.toLowerCase())
+              );
+              if (!cityResult) return alert("Nie znaleziono miejscowości w Polsce.");
+              doSearch({ lat: parseFloat(cityResult.lat), lng: parseFloat(cityResult.lon) });
+            })
+            .catch(err => alert("Błąd geokodowania: " + err.message));
+        }
+      } else {
+        doSearch(selectedLocation);
+      }
     });
 
     // ===== MARKERY SVG – KOLORY BRANDU =====
@@ -600,7 +721,7 @@
           : null;
 
         const matchesFilter =
-          !filters.length || filters.every((type) => inst[type]);
+          !filters.length || filters.some((type) => inst[type]);
         const inRadius = !radius || (distance !== null && distance <= radius);
         const matchesType = !types.length || types.includes(inst.type);
         const shouldDisplay =
